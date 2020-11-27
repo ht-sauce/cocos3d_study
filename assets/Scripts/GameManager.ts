@@ -1,9 +1,16 @@
-import { _decorator, Component, Prefab, instantiate, Node, CCInteger} from "cc";
+import { _decorator, Component, Prefab, instantiate, Node, Label, CCInteger, v3} from "cc";
+import { PlayerController } from "./PlayerController";
 const { ccclass, property } = _decorator;
 
 enum BlockType{
     BT_NONE,
     BT_STONE,
+};
+
+enum GameState{
+    GS_INIT,
+    GS_PLAYING,
+    GS_END,
 };
 
 @ccclass("GameManager")
@@ -14,9 +21,43 @@ export class GameManager extends Component {
     @property({type: CCInteger})
     public roadLength: Number = 50;
     private _road: number[] = [];
+    @property({type: Node})
+    public startMenu: Node = null;
+    @property({type: PlayerController})
+    public playerCtrl: PlayerController = null;
+    private _curState: GameState = GameState.GS_INIT;
+    @property({type: Label})
+    public stepsLabel: Label = null;
 
     start () {
+        this.curState = GameState.GS_INIT;
+        this.playerCtrl.node.on('JumpEnd', this.onPlayerJumpEnd, this);
+    }
+
+    init() {
+        this.startMenu.active = true;
         this.generateRoad();
+        this.playerCtrl.setInputActive(false);
+        this.playerCtrl.node.setPosition(v3());
+        this.playerCtrl.reset();
+    }
+
+    set curState (value: GameState) {
+        switch(value) {
+            case GameState.GS_INIT:
+                this.init();
+                break;
+            case GameState.GS_PLAYING:
+                this.startMenu.active = false;
+                this.stepsLabel.string = '0';   // 将步数重置为0
+                setTimeout(() => {      //直接设置active会直接开始监听鼠标事件，做了一下延迟处理
+                    this.playerCtrl.setInputActive(true);
+                }, 0.1);
+                break;
+            case GameState.GS_END:
+                break;
+        }
+        this._curState = value;
     }
 
     generateRoad() {
@@ -53,6 +94,25 @@ export class GameManager extends Component {
         }
 
         return block;
+    }
+
+    onStartButtonClicked() {
+        this.curState = GameState.GS_PLAYING;
+    }
+
+    checkResult(moveIndex: number) {
+        if (moveIndex <= this.roadLength) {
+            if (this._road[moveIndex] == BlockType.BT_NONE) {   //跳到了空方块上
+                this.curState = GameState.GS_INIT;
+            }
+        } else {    // 跳过了最大长度
+            this.curState = GameState.GS_INIT;
+        }
+    }
+
+    onPlayerJumpEnd(moveIndex: number) {
+        this.stepsLabel.string = '' + moveIndex;
+        this.checkResult(moveIndex);
     }
 
     // update (deltaTime: number) {
